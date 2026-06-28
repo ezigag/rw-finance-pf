@@ -31,20 +31,36 @@ def process_news_data(ticker: str, raw_news: List[Dict[str, Any]]) -> List[tuple
     processed = []
     for item in raw_news:
         try:
-            # yfinance uses 'uuid' as the unique identifier
-            source_id = item.get("uuid")
+            # yfinance recent update wraps data in a 'content' dict
+            content_dict = item.get("content", item)
+            
+            # fallback for older yfinance versions vs new versions
+            source_id = item.get("id") or content_dict.get("id") or item.get("uuid")
             if not source_id:
                 continue
                 
-            provider_time = item.get("providerPublishTime")
-            if provider_time:
-                published_at = datetime.fromtimestamp(provider_time, tz=timezone.utc)
+            pub_date_str = content_dict.get("pubDate")
+            if pub_date_str:
+                try:
+                    # Handle 'Z' suffix for Python versions < 3.11
+                    pub_date_str = pub_date_str.replace("Z", "+00:00")
+                    published_at = datetime.fromisoformat(pub_date_str)
+                except ValueError:
+                    published_at = datetime.now(tz=timezone.utc)
             else:
-                published_at = datetime.now(tz=timezone.utc)
+                provider_time = item.get("providerPublishTime")
+                if provider_time:
+                    published_at = datetime.fromtimestamp(provider_time, tz=timezone.utc)
+                else:
+                    published_at = datetime.now(tz=timezone.utc)
                 
-            title = item.get("title", "")
-            # Content is typically short in yf or just a link. Storing link for reference.
-            content = item.get("link", "")
+            title = content_dict.get("title", "")
+            
+            url_dict = content_dict.get("canonicalUrl", {})
+            link = url_dict.get("url", item.get("link", ""))
+            summary = content_dict.get("summary", "")
+            content_text = f"{summary}\n\nLink: {link}".strip()
+            
             raw_payload = json.dumps(item)
             
             processed.append((
@@ -52,7 +68,7 @@ def process_news_data(ticker: str, raw_news: List[Dict[str, Any]]) -> List[tuple
                 source_id,
                 published_at,
                 title,
-                content,
+                content_text,
                 raw_payload
             ))
         except Exception as e:
