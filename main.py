@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 from typing import List, Dict, Any
@@ -6,6 +5,7 @@ from datetime import datetime, timezone
 import json
 
 import yfinance as yf
+from config import config
 import psycopg2
 from psycopg2.extras import execute_values
 from psycopg2.pool import SimpleConnectionPool
@@ -16,21 +16,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-def get_env_vars() -> tuple[str, List[str]]:
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
-        logger.error("DATABASE_URL environment variable is not set.")
-        sys.exit(1)
-        
-    tickers_str = os.getenv("TRACKED_TICKERS", "")
-    # Safely parse and strip whitespace/empty strings
-    tickers = [t.strip().upper() for t in tickers_str.split(",") if t.strip()]
-    if not tickers:
-        logger.error("TRACKED_TICKERS environment variable is not set or empty.")
-        sys.exit(1)
-        
-    return db_url, tickers
 
 def fetch_news(ticker: str) -> List[Dict[str, Any]]:
     logger.info(f"Fetching news for {ticker}...")
@@ -111,7 +96,15 @@ def upsert_news(pool: SimpleConnectionPool, data: List[tuple]) -> int:
     return inserted_count
 
 def main():
-    db_url, tickers = get_env_vars()
+    db_url = config.DATABASE_URL
+    if not db_url:
+        logger.error("DATABASE_URL environment variable is not set.")
+        sys.exit(1)
+        
+    tickers = [t.strip().upper() for t in config.TRACKED_TICKERS.split(",") if t.strip()]
+    if not tickers:
+        logger.error("TRACKED_TICKERS environment variable is not set or empty.")
+        sys.exit(1)
     
     try:
         pool = SimpleConnectionPool(1, 5, dsn=db_url)

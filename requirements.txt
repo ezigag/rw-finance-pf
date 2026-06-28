@@ -1,2 +1,3 @@
-psycopg2-binary==2.9.9
-yfinance==0.2.36
+psycopg2-binary==2.9.12
+yfinance==1.3.0
+python-dotenv==1.0.1
